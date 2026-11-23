@@ -1,0 +1,43 @@
+name: Build StepCut APK
+
+on:
+  push:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Works both ways: project files committed directly, or uploaded as StepCut*.zip
+      - name: Find the project (unzip if needed)
+        run: |
+          ZIP=$(ls -t StepCut*.zip 2>/dev/null | head -1 || true)
+          if [ -n "$ZIP" ]; then
+            echo "Using $ZIP"
+            rm -rf build-src && mkdir build-src && unzip -q "$ZIP" -d build-src
+            SETTINGS=$(find build-src -name settings.gradle.kts | head -1)
+            DIR=$(dirname "$SETTINGS")
+          else
+            DIR=.
+          fi
+          echo "PROJECT_DIR=$DIR" >> "$GITHUB_ENV"
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.13"
+
+      - name: Build APK
+        working-directory: ${{ env.PROJECT_DIR }}
+        run: gradle assembleRelease --stacktrace
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: StepCut-apk
+          path: ${{ env.PROJECT_DIR }}/app/build/outputs/apk/release/*.apk
